@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Secret Admin Panel - Bajaj Finance</title>
+    <!-- Firebase SDK Integration -->
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+      import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js";
+      import { getDatabase, ref, set, get, remove, child, onValue, push } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+      
+      const firebaseConfig = {
+        apiKey: "AIzaSyAuBgUvtVAqfHzEToczwXLgMZ_mJATL3Uo",
+        authDomain: "bajajloanapp.firebaseapp.com",
+        databaseURL: "https://bajajloanapp-default-rtdb.firebaseio.com",
+        projectId: "bajajloanapp",
+        storageBucket: "bajajloanapp.firebasestorage.app",
+        messagingSenderId: "368042259436",
+        appId: "1:368042259436:web:65f06f796fd0cce714c6c9",
+        measurementId: "G-0WWQ8H2WQC"
+      };
+
+      const app = initializeApp(firebaseConfig);
+      const analytics = getAnalytics(app);
+      const db = getDatabase(app);
+      window.db = db;
+    </script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; -webkit-tap-highlight-color: transparent; }
+        body { background-color: #0f172a; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 10px; }
+        
+        .admin-container { width: 100%; max-width: 450px; background: #ffffff; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); padding: 15px; border: 1px solid #d1d5db; max-height: 95vh; overflow-y: auto; }
+        .admin-title { font-size: 13px; font-weight: 900; color: #0b1d3a; margin-bottom: 10px; border-bottom: 2px solid #e5e7eb; padding-bottom: 5px; display: flex; justify-content: space-between; align-items: center; }
+        
+        .form-group { margin-bottom: 8px; }
+        .form-group label { font-size: 10px; font-weight: 800; color: #4b5563; display: block; margin-bottom: 2px; text-transform: uppercase; }
+        .form-group input { width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; font-weight: 600; }
+        
+        .dynamic-row { background: #f8fafc; border: 1px solid #e2e8f0; padding: 8px; border-radius: 6px; margin-bottom: 8px; position: relative; }
+        .remove-btn { background: #ef4444; color: white; border: none; font-size: 9px; padding: 3px 6px; border-radius: 4px; cursor: pointer; float: right; }
+
+        .add-more-btn { background: #10b981; color: white; border: none; width: 100%; padding: 8px; border-radius: 6px; font-weight: 800; cursor: pointer; font-size: 10px; margin-bottom: 10px; }
+        .save-btn { background: #0b1d3a; color: white; border: none; width: 100%; padding: 12px; border-radius: 8px; font-weight: 900; cursor: pointer; margin-top: 8px; font-size: 12px; }
+
+        .client-list-box { background: #f1f5f9; border-radius: 8px; padding: 8px; margin-bottom: 12px; border: 1px solid #cbd5e1; }
+        .client-item-row { background: white; padding: 8px; border-radius: 6px; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #e2e8f0; font-size: 11px; }
+        .client-actions button { padding: 6px 8px; font-size: 10px; font-weight: bold; border-radius: 4px; border: none; cursor: pointer; }
+        .edit-btn { background: #3b82f6; color: white; }
+        .del-client-btn { background: #ef4444; color: white; margin-left: 4px; }
+        
+        #clientsDetailsPage { display: none; }
+        .detailed-client-card { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; margin-bottom: 8px; font-size: 11px; }
+        .detailed-client-card b { color: #0b1d3a; font-size: 12px; }
+    </style>
+</head>
+<body>
+
+<div class="admin-container">
+    <div class="admin-title">
+      <span id="panelTitleMain">🛠️ Secret Admin Panel</span>
+      <div>
+        <button onclick="toggleClientsPage()" id="togglePageBtn" style="font-size: 10px; padding: 5px 8px; background: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 4px;">📁 Clients Page</button>
+        <button onclick="resetAdminForm()" style="font-size: 10px; padding: 5px 8px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer;">+ New Client</button>
+      </div>
+    </div>
+
+    <!-- MAIN EDIT FORM CONTAINER -->
+    <div id="mainFormContainer">
+        <div class="client-list-box">
+          <div style="font-size: 11px; font-weight: 900; color: #0b1d3a; margin-bottom: 5px;">📋 Registered Clients List</div>
+          <div class="form-group" style="margin-bottom: 5px;">
+            <input type="text" id="admin_search" placeholder="Search Name or Mobile..." onkeyup="filterClientsList()">
+          </div>
+          <div id="adminClientsContainer" style="max-height: 140px; overflow-y: auto;"></div>
+        </div>
+
+        <input type="hidden" id="editing_key" value="">
+
+        <!-- Client Profile Photo & Basic Details -->
+        <div style="background: #f8fafc; border: 1px solid #cbd5e1; padding: 8px; border-radius: 8px; margin-bottom: 10px;">
+          <div style="font-size: 11px; font-weight: 900; color: #0b1d3a; margin-bottom: 6px;">👤 Client Profile & Basic Info</div>
+          <div class="form-group">
+            <label>Client Profile Photo / Avatar (KYC)</label>
+            <input type="file" accept="image/*" onchange="handleAdminAvatarUpload(this)">
+            <input type="hidden" id="admin_avatar" value="">
+            <div id="avatar_preview_container" style="margin-top: 4px;"></div>
+            <span id="avatar_status" style="font-size: 9px; color: #047857; font-weight: bold;">No photo uploaded</span>
+          </div>
+          <div class="form-group">
+            <label>Client Mobile Number (Login ID)</label>
+            <input type="text" id="admin_mobile" placeholder="e.g. 9739074939">
+          </div>
+          <div class="form-group">
+            <label>Client Full Name</label>
+            <input type="text" id="admin_fullName" placeholder="e.g. SREENIVAS C V">
+          </div>
+          <div class="form-group">
+            <label>Father / Husband Name</label>
+            <input type="text" id="admin_fatherName" placeholder="e.g. VASUDEVAN">
+          </div>
+          <div class="form-group">
+            <label>Date of Birth</label>
+            <input type="text" id="admin_dob" placeholder="14/04/1980">
+          </div>
+          <div class="form-group">
+            <label>Email Address</label>
+            <input type="text" id="admin_email" placeholder="client@gmail.com">
+          </div>
+          <div class="form-group">
+            <label>Aadhaar Number</label>
+            <input type="text" id="admin_aadhaar" placeholder="[Aadhaar Redacted]">
+          </div>
+          <div class="form-group">
+            <label>PAN Card Number</label>
+            <input type="text" id="admin_pan" placeholder="BOQPS7426R">
+          </div>
+        </div>
+
+        <!-- Loan & Tenure Details -->
+        <div style="background: #f8fafc; border: 1px solid #cbd5e1; padding: 8px; border-radius: 8px; margin-bottom: 10px;">
+          <div style="font-size: 11px; font-weight: 900; color: #0b1d3a; margin-bottom: 6px;">💰 Loan & Terms Details</div>
+          <div class="form-group">
+            <label>Loan Type Tag</label>
+            <input type="text" id="admin_loanType" value="PERSONAL LOAN">
+          </div>
+          <div class="form-group">
+            <label>Loan Amount (₹)</label>
+            <input type="number" id="admin_loanAmount" placeholder="200000">
+          </div>
+          <div class="form-group">
+            <label>Application Number</label>
+            <input type="text" id="admin_appNo" placeholder="DHANI/2026/0000016">
+          </div>
+          <div class="form-group">
+            <label>Tenure (in Years)</label>
+            <input type="text" id="admin_tenure" placeholder="2">
+          </div>
+          <div class="form-group">
+            <label>Interest Rate (%)</label>
+            <input type="text" id="admin_interestRate" placeholder="7">
+          </div>
+        </div>
+
+        <!-- Bank Details -->
+        <div style="background: #f8fafc; border: 1px solid #cbd5e1; padding: 8px; border-radius: 8px; margin-bottom: 10px;">
+          <div style="font-size: 11px; font-weight: 900; color: #0b1d3a; margin-bottom: 6px;">🏦 Bank Account Details</div>
+          <div class="form-group">
+            <label>Account Type</label>
+            <input type="text" id="admin_accType" value="Saving">
+          </div>
+          <div class="form-group">
+            <label>Bank Name</label>
+            <input type="text" id="admin_bankName" placeholder="Punjab National Bank">
+          </div>
+          <div class="form-group">
+            <label>Account Number</label>
+            <input type="text" id="admin_accNo" placeholder="10462043000033">
+          </div>
+          <div class="form-group">
+            <label>IFSC Code</label>
+            <input type="text" id="admin_ifsc" placeholder="PUNB0104610">
+          </div>
+        </div>
+
+        <!-- Status & Note -->
+        <div class="form-group">
+          <label>Status Heading</label>
+          <input type="text" id="admin_statusHeading" value="PAYMENT COMPLETE">
+        </div>
+        <div class="form-group">
+          <label>Status Note</label>
+          <input type="text" id="admin_statusDesc" value="Fee received. No remaining charges.">
+        </div>
+
+        <!-- Global UPI / QR Settings for this Client -->
+        <div style="background: #f8fafc; border: 1px solid #cbd5e1; padding: 8px; border-radius: 8px; margin-bottom: 10px;">
+          <div style="font-size: 11px; font-weight: 900; color: #0b1d3a; margin-bottom: 6px;">💳 Payment Gateway (UPI & QR)</div>
+          <div class="form-group">
+            <label>Company UPI ID</label>
+            <input type="text" id="admin_upiId" placeholder="e.g. merchant@paytm">
+          </div>
+          <div class="form-group">
+            <label>Upload Company QR Code Image</label>
+            <input type="file" accept="image/*" onchange="handleAdminQRUpload(this)">
+            <input type="hidden" id="admin_qrCodeBase64" value="">
+            <span id="qr_status" style="font-size: 9px; color: #047857; font-weight: bold;">No QR uploaded</span>
+          </div>
+        </div>
+
+        <hr style="margin: 10px 0; border: 0; border-top: 1px solid #e5e7eb;">
+        
+        <div class="admin-title" style="font-size: 11px;">💳 Passbook Charges Manager (Charge-wise Receipts)</div>
+        <div id="chargesListContainer">
+          <div class="dynamic-row">
+            <button type="button" class="remove-btn" onclick="this.parentElement.remove()">X</button>
+            <div class="form-group"><label>Fee Type</label><input type="text" class="charge-name" value="Processing Fee"></div>
+            <div class="form-group"><label>Amount</label><input type="text" class="charge-amount" value="₹1,999"></div>
+            <div class="form-group"><label>Status / TXN Info</label><input type="text" class="charge-txn" value="TXN: 35701722 (PAID)"></div>
+            <div class="form-group" style="margin-top: 5px;">
+              <label>Client Payment Receipt for this Charge</label>
+              <input type="hidden" class="charge-receipt-input" value="">
+              <div class="charge-receipt-preview" style="font-size: 9px; color: #64748b; font-weight: bold;">No receipt uploaded for this specific charge yet.</div>
+            </div>
+          </div>
+        </div>
+        <button type="button" class="add-more-btn" onclick="window.addChargeRow()">+ Add Charge</button>
+
+        <div class="admin-title" style="font-size: 11px;">📄 Documents Manager</div>
+        <div id="papersListContainer">
+          <div class="dynamic-row">
+            <button type="button" class="remove-btn" onclick="this.parentElement.remove()">X</button>
+            <div class="form-group"><label>Document Title</label><input type="text" class="paper-title-input" value="Loan Approval Letter"></div>
+            <div class="form-group"><label>Issue Date</label><input type="text" class="paper-date-input" value="ISSUE DATE: 30 Jul 2026"></div>
+            <div class="form-group">
+              <label>Upload Document File / Image</label>
+              <input type="file" class="paper-file-input" accept="image/*,.pdf" onchange="window.handleDocumentUpload(this)">
+              <input type="hidden" class="paper-link-input" value="https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf">
+              <span style="font-size: 9px; color: #047857; font-weight: bold;" class="upload-status">📎 File Linked</span>
+            </div>
+          </div>
+        </div>
+        <button type="button" class="add-more-btn" onclick="window.addPaperRow()">+ Add Document File</button>
+
+        <button class="save-btn" onclick="window.saveAdminData()">💾 Save / Update Client Details</button>
+    </div>
+
+    <!-- SEPARATE CLIENTS DETAILS PAGE VIEW -->
+    <div id="clientsDetailsPage">
+        <div style="font-size: 11px; font-weight: 900; color: #0b1d3a; margin-bottom: 10px;">📁 All Clients Detailed Information Page</div>
+        <div class="form-group" style="margin-bottom: 10px;">
+          <input type="text" id="full_page_search" placeholder="Search client name or mobile..." onkeyup="window.renderFullClientsPage()">
+        </div>
+        <div id="fullClientsListContainer" style="max-height: 60vh; overflow-y: auto;"></div>
+    </div>
+</div>
+
+<script type="module">
+  import { ref, set, get, remove, push, child, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+  let cachedClients = {};
+
+  window.onload = function() {
+    setupRealtimeFirebaseListener();
+  };
+
+  function setupRealtimeFirebaseListener() {
+    const dbRef = ref(window.db, 'loanApplications');
+    onValue(dbRef, (snapshot) => {
+      if (snapshot.exists()) {
+        cachedClients = snapshot.val();
+      } else {
+        cachedClients = {};
+      }
+      window.renderAdminClientsList(document.getElementById('admin_search') ? document.getElementById('admin_search').value : "");
+      let clientsPage = document.getElementById('clientsDetailsPage');
+      if (clientsPage && clientsPage.style.display === 'block') {
+        window.renderFullClientsPage();
+      }
+    }, (err) => {
+      console.error("Realtime fetch error: ", err);
+    });
+  }
+
+  window.renderAdminClientsList = function(filter = "") {
+    let container = document.getElementById('adminClientsContainer');
+    if (!container) return;
+    
+    let keys = Object.keys(cachedClients);
+    let filteredKeys = keys.filter(key => {
+      let c = cachedClients[key];
+      return (c.fullName && c.fullName.toLowerCase().includes(filter.toLowerCase())) || 
+             (c.mobile && c.mobile.includes(filter));
+    });
+
+    if (filteredKeys.length === 0) {
+      container.innerHTML = '<div style="font-size:10px; color:#6b7280; text-align:center; padding:6px;">No clients found</div>';
+      return;
+    }
+
+    let html = '';
+    filteredKeys.forEach(key => {
+      let c = cachedClients[key];
+      let hasReceipts = c.charges && c.charges.some(ch => ch.receipt);
+      let receiptBadge = hasReceipts ? `<span style="color:#047857; font-weight:bold;">📎 [Charge Receipt(s)]</span>` : `<span style="color:#ef4444; font-size:8px;">[No Receipts]</span>`;
+      html += `
+        <div class="client-item-row">
+          <div>
+            <b>${c.fullName || 'N/A'}</b> ${receiptBadge}<br>
+            <span style="font-size:10px; color:#6b7280;">📱 ${c.mobile || 'N/A'} | Amt: ₹${c.loanAmount || '0'}</span>
+          </div>
+          <div class="client-actions">
+            <button class="edit-btn" onclick="window.editClient('${key}')">Edit</button>
+            <button class="del-client-btn" onclick="window.deleteClient('${key}')">Del</button>
+          </div>
+        </div>`;
+    });
+    container.innerHTML = html;
+  };
+
+  window.filterClientsList = function() {
+    window.renderAdminClientsList(document.getElementById('admin_search').value);
+  };
+
+  window.toggleClientsPage = function() {
+    let mainForm = document.getElementById('mainFormContainer');
+    let clientsPage = document.getElementById('clientsDetailsPage');
+    let title = document.getElementById('panelTitleMain');
+    let toggleBtn = document.getElementById('togglePageBtn');
+
+    if (clientsPage.style.display === 'none' || !clientsPage.style.display) {
+      mainForm.style.display = 'none';
+      clientsPage.style.display = 'block';
+      title.innerText = '📁 Clients Details Page';
+      toggleBtn.innerText = '🛠️ Back to Dashboard';
+      toggleBtn.style.background = '#3b82f6';
+      window.renderFullClientsPage();
+    } else {
+      mainForm.style.display = 'block';
+      clientsPage.style.display = 'none';
+      title.innerText = '🛠️ Secret Admin Panel';
+      toggleBtn.innerText = '📁 Clients Page';
+      toggleBtn.style.background = '#10b981';
+      window.renderAdminClientsList();
+    }
+  };
+
+  window.renderFullClientsPage = function() {
+    let container = document.getElementById('fullClientsListContainer');
+    if (!container) return;
+    let query = document.getElementById('full_page_search') ? document.getElementById('full_page_search').value.toLowerCase() : '';
+
+    let keys = Object.keys(cachedClients);
+    let filteredKeys = keys.filter(key => {
+      let c = cachedClients[key];
+      return (c.fullName && c.fullName.toLowerCase().includes(query)) || 
+             (c.mobile && c.mobile.includes(query)) || 
+             (c.appNo && c.appNo.toLowerCase().includes(query));
+    });
+
+    if (filteredKeys.length === 0) {
+      container.innerHTML = '<div style="font-size:10px; color:#6b7280; text-align:center; padding:10px;">No records found</div>';
+      return;
+    }
+
+    let html = '';
+    filteredKeys.forEach(key => {
+      let c = cachedClients[key];
+      let avatarLinkHtml = c.avatar 
+        ? `<a href="${c.avatar}" target="_blank" download="KYC_Photo_${c.fullName}" style="color: #2563eb; text-decoration: underline; font-weight: bold;">📥 Download KYC Photo</a>` 
+        : `<span style="color: #ef4444;">No Photo Uploaded</span>`;
+
+      let papersListText = (c.papers && c.papers.length > 0) ? c.papers.map(p => p.title).join(', ') : 'No documents uploaded';
+
+      html += `
+        <div class="detailed-client-card">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 4px;">
+            <b>👤 ${c.fullName || 'N/A'}</b>
+            <button onclick="window.editClientAndSwitch('${key}')" style="background:#2563eb; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:10px;">✏️ Edit & Update</button>
+          </div>
+          <div style="color:#4b5563; line-height: 1.5;">
+            📱 <b>Mobile:</b> ${c.mobile || 'N/A'} | 🆔 <b>App No:</b> ${c.appNo || 'N/A'}<br>
+            💰 <b>Loan Amt:</b> ₹${c.loanAmount || '0'} | ⏳ <b>Tenure:</b> ${c.tenure || '0'} Years<br>
+            🏦 <b>Bank:</b> ${c.bankName || 'N/A'} (${c.accNo || 'N/A'})<br>
+            📌 <b>Status:</b> <span style="color:#047857; font-weight:bold;">${c.statusHeading || 'N/A'}</span> - ${c.statusDesc || ''}<br>
+            🖼️ <b>KYC Photo:</b> ${avatarLinkHtml}<br>
+            📂 <b>Documents:</b> ${papersListText}
+          </div>
+        </div>`;
+    });
+    container.innerHTML = html;
+  };
+
+  window.editClientAndSwitch = function(key) {
+    window.toggleClientsPage();
+    window.editClient(key);
+  };
+
+  window.resetAdminForm = function() {
+    document.getElementById('editing_key').value = '';
+    document.getElementById('admin_avatar').value = '';
+    document.getElementById('avatar_preview_container').innerHTML = '';
+    document.getElementById('avatar_status').innerText = 'No photo uploaded';
+    document.getElementById('admin_mobile').value = '';
+    document.getElementById('admin_fullName').value = '';
+    document.getElementById('admin_fatherName').value = '';
+    document.getElementById('admin_dob').value = '';
+    document.getElementById('admin_email').value = '';
+    document.getElementById('admin_aadhaar').value = '';
+    document.getElementById('admin_pan').value = '';
+    document.getElementById('admin_loanType').value = 'PERSONAL LOAN';
+    document.getElementById('admin_loanAmount').value = '';
+    document.getElementById('admin_appNo').value = '';
+    document.getElementById('admin_tenure').value = '2';
+    document.getElementById('admin_interestRate').value = '7';
+    document.getElementById('admin_accType').value = 'Saving';
+    document.getElementById('admin_bankName').value = '';
+    document.getElementById('admin_accNo').value = '';
+    document.getElementById('admin_ifsc').value = '';
+    document.getElementById('admin_statusHeading').value = 'PAYMENT COMPLETE';
+    document.getElementById('admin_statusDesc').value = 'Fee received. No remaining charges.';
+    document.getElementById('admin_upiId').value = '';
+    document.getElementById('admin_qrCodeBase64').value = '';
+    document.getElementById('qr_status').innerText = 'No QR uploaded';
+    document.getElementById('chargesListContainer').innerHTML = `
+      <div class="dynamic-row">
+        <button type="button" class="remove-btn" onclick="this.parentElement.remove()">X</button>
+        <div class="form-group"><label>Fee Type</label><input type="text" class="charge-name" value="Processing Fee"></div>
+        <div class="form-group"><label>Amount</label><input type="text" class="charge-amount" value="₹1,999"></div>
+        <div class="form-group"><label>Status / TXN Info</label><input type="text" class="charge-txn" value="TXN: 35701722 (PAID)"></div>
+        <div class="form-group" style="margin-top: 5px;">
+          <label>Client Payment Receipt for this Charge</label>
+          <input type="hidden" class="charge-receipt-input" value="">
+          <div class="charge-receipt-preview" style="font-size: 9px; color: #64748b; font-weight: bold;">No receipt uploaded for this specific charge yet.</div>
+        </div>
+      </div>`;
+    document.getElementById('papersListContainer').innerHTML = '';
+  };
+
+  window.editClient = function(key) {
+    let client = cachedClients[key];
+    if (!client) return;
+
+    document.getElementById('editing_key').value = key;
+    document.getElementById('admin_avatar').value = client.avatar || '';
+    if (client.avatar) {
+      document.getElementById('avatar_status').innerText = '✅ Photo Loaded';
+      document.getElementById('avatar_preview_container').innerHTML = `<a href="${client.avatar}" target="_blank" download="KYC_Photo" style="font-size:10px; color:#2563eb; text-decoration:underline;">👁️ View/Download KYC Photo</a>`;
+    } else {
+      document.getElementById('avatar_status').innerText = 'No photo uploaded';
+      document.getElementById('avatar_preview_container').innerHTML = '';
+    }
+
+    document.getElementById('admin_mobile').value = client.mobile || '';
+    document.getElementById('admin_fullName').value = client.fullName || '';
+    document.getElementById('admin_fatherName').value = client.fatherName || '';
+    document.getElementById('admin_dob').value = client.dob || '';
+    document.getElementById('admin_email').value = client.email || '';
+    document.getElementById('admin_aadhaar').value = client.aadhaar || '';
+    document.getElementById('admin_pan').value = client.pan || '';
+    document.getElementById('admin_loanType').value = client.loanType || 'PERSONAL LOAN';
+    document.getElementById('admin_loanAmount').value = client.loanAmount || '';
+    document.getElementById('admin_appNo').value = client.appNo || '';
+    document.getElementById('admin_tenure').value = client.tenure || '2';
+    document.getElementById('admin_interestRate').value = client.interestRate || '7';
+    document.getElementById('admin_accType').value = client.accType || 'Saving';
+    document.getElementById('admin_bankName').value = client.bankName || '';
+    document.getElementById('admin_accNo').value = client.accNo || '';
+    document.getElementById('admin_ifsc').value = client.ifsc || '';
+    document.getElementById('admin_statusHeading').value = client.statusHeading || '';
+    document.getElementById('admin_statusDesc').value = client.statusDesc || '';
+    document.getElementById('admin_upiId').value = client.upiId || '';
+    document.getElementById('admin_qrCodeBase64').value = client.qrCodeBase64 || '';
+    document.getElementById('qr_status').innerText = client.qrCodeBase64 ? '✅ QR Loaded' : 'No QR uploaded';
+
+    let chargesContainer = document.getElementById('chargesListContainer');
+    chargesContainer.innerHTML = '';
+    if (client.charges && client.charges.length > 0) {
+      client.charges.forEach(c => {
+        let receiptText = c.receipt ? `<span style="color:#047857; font-weight:bold;">✅ Receipt Uploaded by Client</span>` : `<span style="color:#64748b;">No receipt uploaded yet</span>`;
+        chargesContainer.insertAdjacentHTML('beforeend', `
+          <div class="dynamic-row">
+            <button type="button" class="remove-btn" onclick="this.parentElement.remove()">X</button>
+            <div class="form-group"><label>Fee Type</label><input type="text" class="charge-name" value="${c.name || ''}"></div>
+            <div class="form-group"><label>Amount</label><input type="text" class="charge-amount" value="${c.amount || ''}"></div>
+            <div class="form-group"><label>Status / TXN Info</label><input type="text" class="charge-txn" value="${c.txn || ''}"></div>
+            <div class="form-group" style="margin-top: 5px;">
+              <label>Client Payment Receipt for this Charge</label>
+              <input type="hidden" class="charge-receipt-input" value="${c.receipt || ''}">
+              <div class="charge-receipt-preview">${receiptText}</div>
+            </div>
+          </div>`);
+      });
+    }
+
+    let papersContainer = document.getElementById('papersListContainer');
+    papersContainer.innerHTML = '';
+    if (client.papers && client.papers.length > 0) {
+      client.papers.forEach(p => {
+        papersContainer.insertAdjacentHTML('beforeend', `
+          <div class="dynamic-row">
+            <button type="button" class="remove-btn" onclick="this.parentElement.remove()">X</button>
+            <div class="form-group"><label>Document Title</label><input type="text" class="paper-title-input" value="${p.title || ''}"></div>
+            <div class="form-group"><label>Issue Date</label><input type="text" class="paper-date-input" value="${p.date || ''}"></div>
+            <div class="form-group">
+              <label>Upload Document File / Image</label>
+              <input type="file" class="paper-file-input" accept="image/*,.pdf" onchange="window.handleDocumentUpload(this)">
+              <input type="hidden" class="paper-link-input" value="${p.link || ''}">
+              <span style="font-size: 9px; color: #047857; font-weight: bold;" class="upload-status">📎 File Linked</span>
+            </div>
+          </div>`);
+      });
+    }
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  window.deleteClient = async function(key) {
+    if (confirm('Are you sure you want to delete this client?')) {
+      try {
+        await remove(ref(window.db, `loanApplications/${key}`));
+        delete cachedClients[key];
+        window.renderAdminClientsList();
+        window.renderFullClientsPage();
+        window.resetAdminForm();
+        alert('Client deleted successfully.');
+      } catch (err) {
+        console.error(err);
+        alert('Failed to delete client from Firebase.');
+      }
+    }
+  };
+
+  window.handleAdminAvatarUpload = function(input) {
+    if (input.files && input.files[0]) {
+      let reader = new FileReader();
+      reader.onload = function(e) {
+        document.getElementById('admin_avatar').value = e.target.result;
+        document.getElementById('avatar_status').innerText = '✅ Photo Loaded Successfully';
+        document.getElementById('avatar_preview_container').innerHTML = `<a href="${e.target.result}" target="_blank" download="KYC_Photo" style="font-size:10px; color:#2563eb; text-decoration:underline;">👁️ View Uploaded Photo</a>`;
+      };
+      reader.readAsDataURL(input.files[0]);
+    }
+  };
+
+  window.handleAdminQRUpload = function(input) {
+    if (input.files && input.files[0]) {
+      let reader = new FileReader();
+      reader.onload = function(e) {
+        document.getElementById('admin_qrCodeBase64').value = e.target.result;
+        document.getElementById('qr_status').innerText = '✅ QR Code Loaded Successfully';
+      };
+      reader.readAsDataURL(input.files[0]);
+    }
+  };
+
+  window.handleDocumentUpload = function(input) {
+    if (input.files && input.files[0]) {
+      let reader = new FileReader();
+      let parentRow = input.closest('.dynamic-row');
+      let linkInput = parentRow.querySelector('.paper-link-input');
+      let statusSpan = parentRow.querySelector('.upload-status');
+      reader.onload = function(e) {
+        linkInput.value = e.target.result;
+        statusSpan.innerText = '📎 File Uploaded & Linked';
+      };
+      reader.readAsDataURL(input.files[0]);
+    }
+  };
+
+  window.addChargeRow = function() {
+    let container = document.getElementById('chargesListContainer');
+    container.insertAdjacentHTML('beforeend', `
+      <div class="dynamic-row">
+        <button type="button" class="remove-btn" onclick="this.parentElement.remove()">X</button>
+        <div class="form-group"><label>Fee Type</label><input type="text" class="charge-name" value="New Fee"></div>
+        <div class="form-group"><label>Amount</label><input type="text" class="charge-amount" value="₹500"></div>
+        <div class="form-group"><label>Status / TXN Info</label><input type="text" class="charge-txn" value="PENDING"></div>
+        <div class="form-group" style="margin-top: 5px;">
+          <label>Client Payment Receipt for this Charge</label>
+          <input type="hidden" class="charge-receipt-input" value="">
+          <div class="charge-receipt-preview" style="font-size: 9px; color: #64748b; font-weight: bold;">No receipt uploaded yet.</div>
+        </div>
+      </div>`);
+  };
+
+  window.addPaperRow = function() {
+    let container = document.getElementById('papersListContainer');
+    container.insertAdjacentHTML('beforeend', `
+      <div class="dynamic-row">
+        <button type="button" class="remove-btn" onclick="this.parentElement.remove()">X</button>
+        <div class="form-group"><label>Document Title</label><input type="text" class="paper-title-input" value="Document Title"></div>
+        <div class="form-group"><label>Issue Date</label><input type="text" class="paper-date-input" value="ISSUE DATE: Today"></div>
+        <div class="form-group">
+          <label>Upload Document File / Image</label>
+          <input type="file" class="paper-file-input" accept="image/*,.pdf" onchange="window.handleDocumentUpload(this)">
+          <input type="hidden" class="paper-link-input" value="https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf">
+          <span style="font-size: 9px; color: #047857; font-weight: bold;" class="upload-status">📎 File Linked</span>
+        </div>
+      </div>`);
+  };
+
+  window.saveAdminData = async function() {
+    let mobile = document.getElementById('admin_mobile').value.trim();
+    if (!mobile) {
+      alert('Please enter client mobile number!');
+      return;
+    }
+
+    let charges = [];
+    document.querySelectorAll('#chargesListContainer .dynamic-row').forEach(row => {
+      charges.push({
+        name: row.querySelector('.charge-name').value,
+        amount: row.querySelector('.charge-amount').value,
+        txn: row.querySelector('.charge-txn').value,
+        receipt: row.querySelector('.charge-receipt-input').value || ""
+      });
+    });
+
+    let papers = [];
+    document.querySelectorAll('#papersListContainer .dynamic-row').forEach(row => {
+      papers.push({
+        title: row.querySelector('.paper-title-input').value,
+        date: row.querySelector('.paper-date-input').value,
+        link: row.querySelector('.paper-link-input').value
+      });
+    });
+
+    let clientObj = {
+      mobile: mobile,
+      fullName: document.getElementById('admin_fullName').value,
+      fatherName: document.getElementById('admin_fatherName').value,
+      dob: document.getElementById('admin_dob').value,
+      email: document.getElementById('admin_email').value,
+      aadhaar: document.getElementById('admin_aadhaar').value,
+      pan: document.getElementById('admin_pan').value,
+      loanType: document.getElementById('admin_loanType').value,
+      loanAmount: document.getElementById('admin_loanAmount').value,
+      appNo: document.getElementById('admin_appNo').value,
+      tenure: document.getElementById('admin_tenure').value,
+      interestRate: document.getElementById('admin_interestRate').value,
+      accType: document.getElementById('admin_accType').value,
+      bankName: document.getElementById('admin_bankName').value,
+      accNo: document.getElementById('admin_accNo').value,
+      ifsc: document.getElementById('admin_ifsc').value,
+      statusHeading: document.getElementById('admin_statusHeading').value,
+      statusDesc: document.getElementById('admin_statusDesc').value,
+      upiId: document.getElementById('admin_upiId').value,
+      qrCodeBase64: document.getElementById('admin_qrCodeBase64').value,
+      avatar: document.getElementById('admin_avatar').value,
+      charges: charges,
+      papers: papers
+    };
+
+    let editingKey = document.getElementById('editing_key').value;
+
+    try {
+      let targetKey = editingKey;
+      if (!targetKey) {
+        let existingKey = Object.keys(cachedClients).find(k => cachedClients[k].mobile === mobile);
+        targetKey = existingKey || push(ref(window.db, 'loanApplications')).key;
+      }
+
+      await set(ref(window.db, `loanApplications/${targetKey}`), clientObj);
+      cachedClients[targetKey] = clientObj;
+
+      alert('Client details saved/updated successfully to Firebase!');
+      window.renderAdminClientsList();
+      window.renderFullClientsPage();
+    } catch (err) {
+      console.error(err);
+      alert('Failed to save data to Firebase.');
+    }
+  };
+</script>
+
+</body>
+</html>
